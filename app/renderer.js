@@ -13,12 +13,14 @@ const monthlyBudgets = {
   diciembre: { incomes: [], expenses: [], monthlyExpenses: 0, personalExpenses: 0, investments: 0, savings: 0, totalIncome: 0 }
 };
 
+const investmentGoals = [];
 let savingsChart = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   initializeTabs();
   initializeMonthlyTabs();
   initializeSavingsChart();
+  renderInvestmentGoals();
 });
 
 function initializeTabs() {
@@ -467,46 +469,105 @@ function initializeSavingsChart() {
   const ctx = document.getElementById('savingsChart').getContext('2d');
   
   savingsChart = new Chart(ctx, {
-    type: 'bar',
+    type: 'line',
     data: {
       labels: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
       datasets: [{
-        label: 'Ahorro Mensual (€)',
+        label: 'Ahorro Mensual',
         data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        backgroundColor: 'rgba(139, 92, 246, 0.8)',
-        borderColor: 'rgba(139, 92, 246, 1)',
-        borderWidth: 2
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99, 102, 241, 0.05)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointBackgroundColor: '#6366f1',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointHoverRadius: 6
       }]
     },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            callback: function(value) {
-              return '€' + value.toFixed(0);
-            }
-          }
-        }
+      maintainAspectRatio: false,
+      interaction: {
+        intersect: false,
+        mode: 'index'
       },
       plugins: {
         legend: {
           display: true,
-          position: 'top'
+          position: 'top',
+          labels: {
+            color: '#6b7280',
+            font: {
+              size: 13,
+              weight: '500'
+            },
+            padding: 15,
+            boxWidth: 0,
+            boxHeight: 0
+          }
         },
         tooltip: {
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          padding: 12,
+          cornerRadius: 8,
+          titleFont: {
+            size: 13,
+            weight: 'bold'
+          },
+          bodyFont: {
+            size: 12
+          },
           callbacks: {
             label: function(context) {
-              return context.dataset.label + ': €' + context.parsed.y.toFixed(2);
+              return 'Ahorro: €' + context.parsed.y.toFixed(2);
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false,
+            color: 'rgba(0, 0, 0, 0.05)'
+          },
+          ticks: {
+            color: '#9ca3af',
+            font: {
+              size: 12
+            }
+          }
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: 'rgba(0, 0, 0, 0.05)',
+            drawBorder: false
+          },
+          ticks: {
+            color: '#9ca3af',
+            font: {
+              size: 12
+            },
+            callback: function(value) {
+              return '€' + value.toFixed(0);
             }
           }
         }
       }
     }
   });
+  
+  window.addEventListener('resize', handleChartResize);
+}
+
+function handleChartResize() {
+  if (savingsChart) {
+    savingsChart.resize();
+  }
 }
 
 function updateSavingsChart() {
@@ -535,5 +596,109 @@ function updateSavingsChart() {
   savingsChart.update();
 }
 
+function createInvestmentGoal() {
+  const nameInput = document.getElementById('new-goal-name');
+  const amountInput = document.getElementById('new-goal-amount');
+  
+  const name = nameInput.value.trim();
+  const targetAmount = parseFloat(amountInput.value) || 0;
+  
+  if (!name) {
+    alert('Por favor, ingrese un nombre para el objetivo');
+    return;
+  }
+  
+  if (targetAmount <= 0) {
+    alert('Por favor, ingrese una cantidad válida');
+    return;
+  }
+  
+  const goalId = 'goal-' + Date.now();
+  investmentGoals.push({
+    id: goalId,
+    name: name,
+    targetAmount: targetAmount,
+    currentAmount: 0
+  });
+  
+  nameInput.value = '';
+  amountInput.value = '';
+  
+  renderInvestmentGoals();
+}
+
+function addFundsToGoal(goalId) {
+  const amountInput = document.getElementById(`funds-${goalId}`);
+  const amount = parseFloat(amountInput.value) || 0;
+  
+  if (amount <= 0) {
+    alert('Por favor, ingrese una cantidad válida');
+    return;
+  }
+  
+  const goal = investmentGoals.find(g => g.id === goalId);
+  if (goal) {
+    goal.currentAmount += amount;
+    amountInput.value = '';
+    renderInvestmentGoals();
+  }
+}
+
+function deleteInvestmentGoal(goalId) {
+  if (confirm('¿Estás seguro de que deseas eliminar este objetivo?')) {
+    const index = investmentGoals.findIndex(g => g.id === goalId);
+    if (index > -1) {
+      investmentGoals.splice(index, 1);
+      renderInvestmentGoals();
+    }
+  }
+}
+
+function renderInvestmentGoals() {
+  const container = document.getElementById('investment-goals-container');
+  
+  if (investmentGoals.length === 0) {
+    container.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 40px;">No hay objetivos de ahorro. ¡Crea uno arriba!</p>';
+    return;
+  }
+  
+  container.innerHTML = investmentGoals.map(goal => {
+    const percentage = Math.min((goal.currentAmount / goal.targetAmount) * 100, 100);
+    const remaining = goal.targetAmount - goal.currentAmount;
+    const isComplete = goal.currentAmount >= goal.targetAmount;
+    
+    return `
+      <div class="investment-goal-card">
+        <h4>
+          <span class="goal-name">${goal.name}</span>
+          <button class="delete-btn" onclick="deleteInvestmentGoal('${goal.id}')">Eliminar</button>
+        </h4>
+        
+        <div class="goal-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${percentage}%;"></div>
+          </div>
+        </div>
+        
+        <div class="goal-amount">
+          <strong>Ahorrado:</strong> €${goal.currentAmount.toFixed(2)} / €${goal.targetAmount.toFixed(2)}
+        </div>
+        
+        <div class="goal-amount" ${isComplete ? 'style="color: #10b981; font-weight: bold;"' : ''}>
+          ${isComplete ? '✓ ¡Objetivo alcanzado!' : `Falta: €${remaining.toFixed(2)}`}
+        </div>
+        
+        <div class="goal-add-funds">
+          <input type="number" id="funds-${goal.id}" placeholder="Cantidad (€)" step="0.01" min="0">
+          <button onclick="addFundsToGoal('${goal.id}')">Añadir</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 window.addIncome = addIncome;
 window.addExpense = addExpense;
+window.createInvestmentGoal = createInvestmentGoal;
+window.addFundsToGoal = addFundsToGoal;
+window.deleteInvestmentGoal = deleteInvestmentGoal;
