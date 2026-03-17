@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeMonthlyTabs();
   initializeSavingsChart();
   renderInvestmentGoals();
+  initializeSettingsUI();
 });
 
 function showValidationMessage(message) {
@@ -711,6 +712,49 @@ function renderInvestmentGoals() {
       </div>
     `;
   }).join('');
+}
+
+function initializeSettingsUI() {
+  const overlay = document.getElementById('settings-overlay');
+  const openButton = document.getElementById('open-settings-button');
+  const closeButton = document.getElementById('close-settings-button');
+  const navButtons = document.querySelectorAll('.settings-nav-button');
+  const sections = {
+    general: document.getElementById('settings-section-general')
+  };
+  const title = document.getElementById('settings-title');
+
+  if (!overlay || !openButton || !closeButton || !title) return;
+
+  function openSettings() {
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeSettings() {
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  openButton.addEventListener('click', openSettings);
+  closeButton.addEventListener('click', closeSettings);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeSettings();
+  });
+
+  navButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const sectionKey = btn.getAttribute('data-settings-section');
+      navButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      Object.keys(sections).forEach(key => {
+        if (sections[key]) sections[key].style.display = key === sectionKey ? 'block' : 'none';
+      });
+
+      if (sectionKey === 'general') title.textContent = 'General';
+    });
+  });
 }
 
 window.addIncome = addIncome;
