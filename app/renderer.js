@@ -17,6 +17,10 @@ const investmentGoals = [];
 let savingsChart = null;
 let validationMessageTimeout = null;
 
+const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+// Initialize application
 document.addEventListener('DOMContentLoaded', () => {
   let validationBar = document.getElementById('validation-bar');
   if (!validationBar) {
@@ -41,7 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeMonthlyTabs();
   initializeSavingsChart();
   renderInvestmentGoals();
+  ensureDefaultSavingsModes();
   initializeSettingsUI();
+  renderIncomeModeSelectors();
 });
 
 function showValidationMessage(message) {
@@ -58,6 +64,101 @@ function showValidationMessage(message) {
   validationMessageTimeout = setTimeout(() => {
     bar.style.display = 'none';
   }, 3000);
+}
+
+function getSavingsModes() {
+  try {
+    const raw = localStorage.getItem('savingsModes');
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function setSavingsModes(modes) {
+  localStorage.setItem('savingsModes', JSON.stringify(modes));
+}
+
+function ensureDefaultSavingsModes() {
+  const existing = getSavingsModes();
+  if (existing.length > 0) return;
+
+  setSavingsModes([
+    { id: 'mode-default-ahorrador', name: 'Ahorrador', isDefault: true, allocations: { monthly: 40, personal: 20, investment: 20, savings: 20 } },
+    { id: 'mode-default-inversion', name: 'Inversion', isDefault: false, allocations: { monthly: 40, personal: 20, investment: 35, savings: 5 } }
+  ]);
+}
+
+function getMonthModeSelection(month) {
+  try {
+    const raw = localStorage.getItem('monthSavingsModeSelection');
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? (parsed[month] || '') : '';
+  } catch {
+    return '';
+  }
+}
+
+function setMonthModeSelection(month, modeId) {
+  let parsed = {};
+  try {
+    const raw = localStorage.getItem('monthSavingsModeSelection');
+    parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== 'object') parsed = {};
+  } catch {
+    parsed = {};
+  }
+  parsed[month] = modeId || '';
+  localStorage.setItem('monthSavingsModeSelection', JSON.stringify(parsed));
+}
+
+function getModeById(modeId) {
+  const modes = getSavingsModes();
+  return modes.find(m => m.id === modeId) || null;
+}
+
+function getModeForMonth(month) {
+  const selected = getMonthModeSelection(month);
+  const mode = selected ? getModeById(selected) : null;
+  if (mode) return mode;
+  const modes = getSavingsModes();
+  const fallback = modes.find(m => m.isDefault) || modes[0];
+  if (fallback) return fallback;
+  return { id: '', name: 'Por defecto', allocations: { monthly: 40, personal: 20, investment: 20, savings: 20 } };
+}
+
+function modeSumPercent(alloc) {
+  return (Number(alloc.monthly) || 0) + (Number(alloc.personal) || 0) + (Number(alloc.investment) || 0) + (Number(alloc.savings) || 0);
+}
+
+function renderIncomeModeSelectors() {
+  const modes = getSavingsModes();
+  MONTHS.forEach((month) => {
+    const select = document.getElementById(`${month}-income-mode`);
+    if (!select) return;
+    let current = getMonthModeSelection(month);
+    if (!current) {
+      current = modes[0]?.id || '';
+      if (current) setMonthModeSelection(month, current);
+    }
+    select.innerHTML = `
+      ${modes.map(m => `<option value="${m.id}">${m.name || 'Perfil sin nombre'}</option>`).join('')}
+    `;
+    select.value = current;
+
+    if (!select.__bound) {
+      select.addEventListener('change', () => {
+        setMonthModeSelection(month, select.value);
+        updateBudgetAllocations(month);
+        updateSavingsChart();
+      });
+      select.__bound = true;
+    }
+
+    updateBudgetAllocations(month);
+  });
+  updateSavingsChart();
 }
 
 function initializeTabs() {
@@ -94,6 +195,9 @@ function initializeMonthlyTabs() {
             <div class="amount" id="${month}-income-total">€0</div>
             <div class="input-section" style="padding: 10px 0; margin: 0;">
               <div class="input-group" style="flex-direction: column; gap: 8px;">
+                <label for="${month}-income-mode" style="font-size: 12px; color: #6b7280;">Modo</label>
+                <select id="${month}-income-mode" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                </select>
                 <input type="text" id="${month}-income-description" placeholder="Descripción (ej: Salario)" style="min-width: auto;">
                 <input type="number" id="${month}-income-amount" placeholder="Cantidad (€)" step="0.01" min="0" style="min-width: auto;">
                 <button onclick="addIncome('${month}')" style="margin: 0;">Añadir Ingreso</button>
@@ -103,7 +207,7 @@ function initializeMonthlyTabs() {
           </div>
           
           <div class="category-card expense">
-            <h3>Gastos Mensuales (40%)</h3>
+            <h3>Gastos Mensuales (<span id="${month}-monthly-pct">40</span>%)</h3>
             <div class="amount" id="${month}-monthly-display">€0</div>
             <div style="height: 150px; width: 100%; position: relative;">
               <canvas id="${month}-monthly-chart"></canvas>
@@ -121,7 +225,7 @@ function initializeMonthlyTabs() {
           </div>
           
           <div class="category-card personal">
-            <h3>Gastos Personales (20%)</h3>
+            <h3>Gastos Personales (<span id="${month}-personal-pct">20</span>%)</h3>
             <div class="amount" id="${month}-personal-display">€0</div>
             <div style="height: 150px; width: 100%; position: relative;">
               <canvas id="${month}-personal-chart"></canvas>
@@ -139,7 +243,7 @@ function initializeMonthlyTabs() {
           </div>
           
           <div class="category-card investment">
-            <h3>Inversiones (20%)</h3>
+            <h3>Inversiones (<span id="${month}-investment-pct">20</span>%)</h3>
             <div class="amount" id="${month}-investment-display">€0</div>
             <div style="height: 150px; width: 100%; position: relative;">
               <canvas id="${month}-investment-chart"></canvas>
@@ -157,7 +261,7 @@ function initializeMonthlyTabs() {
           </div>
           
           <div class="category-card savings">
-            <h3>Ahorro Total</h3>
+            <h3>Ahorro Total (<span id="${month}-savings-pct">20</span>%)</h3>
             <div class="amount" id="${month}-savings-display">€0</div>
             <small id="${month}-savings-info" style="color: #6b7280;">Base: €0 + Sobrantes</small>
           </div>
@@ -261,10 +365,30 @@ function updateIncomeDisplay(month) {
 function updateBudgetAllocations(month) {
   const budget = monthlyBudgets[month];
   const income = budget.totalIncome;
-  const monthlyExpenses = income * 0.40;
-  const personalExpenses = income * 0.20;
-  const investments = income * 0.20;
-  const baseSavings = income * 0.20;
+  const mode = getModeForMonth(month);
+  const sum = modeSumPercent(mode.allocations || {});
+  if (Math.abs(sum - 100) > 0.0001) {
+    showValidationMessage(`El perfil "${mode.name || 'sin nombre'}" no suma 100%`);
+  }
+
+  const monthlyPct = (Number(mode.allocations?.monthly) || 0) / 100;
+  const personalPct = (Number(mode.allocations?.personal) || 0) / 100;
+  const investPct = (Number(mode.allocations?.investment) || 0) / 100;
+  const savingsPct = (Number(mode.allocations?.savings) || 0) / 100;
+
+  const monthlyPctEl = document.getElementById(`${month}-monthly-pct`);
+  const personalPctEl = document.getElementById(`${month}-personal-pct`);
+  const investmentPctEl = document.getElementById(`${month}-investment-pct`);
+  const savingsPctEl = document.getElementById(`${month}-savings-pct`);
+  if (monthlyPctEl) monthlyPctEl.textContent = String(Number(mode.allocations?.monthly) || 0);
+  if (personalPctEl) personalPctEl.textContent = String(Number(mode.allocations?.personal) || 0);
+  if (investmentPctEl) investmentPctEl.textContent = String(Number(mode.allocations?.investment) || 0);
+  if (savingsPctEl) savingsPctEl.textContent = String(Number(mode.allocations?.savings) || 0);
+
+  const monthlyExpenses = income * monthlyPct;
+  const personalExpenses = income * personalPct;
+  const investments = income * investPct;
+  const baseSavings = income * savingsPct;
   
   budget.monthlyExpenses = monthlyExpenses;
   budget.personalExpenses = personalExpenses;
@@ -578,10 +702,7 @@ function handleChartResize() {
 function updateSavingsChart() {
   if (!savingsChart) return;
   
-  const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
-                  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-  
-  const savingsData = months.map(month => {
+  const savingsData = MONTHS.map(month => {
     const budget = monthlyBudgets[month];
     
     if (budget.totalIncome === 0) return 0;
@@ -720,7 +841,8 @@ function initializeSettingsUI() {
   const closeButton = document.getElementById('close-settings-button');
   const navButtons = document.querySelectorAll('.settings-nav-button');
   const sections = {
-    general: document.getElementById('settings-section-general')
+    general: document.getElementById('settings-section-general'),
+    'modos-ahorro': document.getElementById('settings-section-modos-ahorro')
   };
   const title = document.getElementById('settings-title');
 
@@ -753,8 +875,181 @@ function initializeSettingsUI() {
       });
 
       if (sectionKey === 'general') title.textContent = 'General';
+      else if (sectionKey === 'modos-ahorro') title.textContent = 'Modos ahorro';
     });
   });
+
+  initializeModesUI();
+}
+
+function initializeModesUI() {
+  const listEl = document.getElementById('modes-items');
+  const createBtn = document.getElementById('modes-create');
+  const saveBtn = document.getElementById('modes-save');
+  const nameInput = document.getElementById('mode-name');
+  const inMonthly = document.getElementById('mode-monthly');
+  const inPersonal = document.getElementById('mode-personal');
+  const inInvestment = document.getElementById('mode-investment');
+  const inSavings = document.getElementById('mode-savings');
+  const sumBadge = document.getElementById('mode-sum');
+  const defaultCheckbox = document.getElementById('mode-default');
+
+  if (!listEl || !createBtn || !saveBtn || !nameInput || !inMonthly || !inPersonal || !inInvestment || !inSavings || !sumBadge || !defaultCheckbox) return;
+
+  let selectedId = '';
+
+  function readAlloc() {
+    return {
+      monthly: Math.max(0, parseFloat(inMonthly.value) || 0),
+      personal: Math.max(0, parseFloat(inPersonal.value) || 0),
+      investment: Math.max(0, parseFloat(inInvestment.value) || 0),
+      savings: Math.max(0, parseFloat(inSavings.value) || 0)
+    };
+  }
+
+  function updateSum() {
+    const sum = modeSumPercent(readAlloc());
+    const rounded = Math.round(sum * 10) / 10;
+    sumBadge.textContent = `Total: ${rounded}%`;
+    sumBadge.classList.remove('ok', 'bad');
+    if (Math.abs(sum - 100) < 0.0001) sumBadge.classList.add('ok');
+    else sumBadge.classList.add('bad');
+  }
+
+  [inMonthly, inPersonal, inInvestment, inSavings].forEach(inp => inp.addEventListener('input', updateSum));
+
+  function loadMode(mode) {
+    selectedId = mode.id;
+    nameInput.value = mode.name || '';
+    inMonthly.value = mode.allocations?.monthly ?? 0;
+    inPersonal.value = mode.allocations?.personal ?? 0;
+    inInvestment.value = mode.allocations?.investment ?? 0;
+    inSavings.value = mode.allocations?.savings ?? 0;
+     defaultCheckbox.checked = !!mode.isDefault;
+    updateSum();
+  }
+
+  function renderList() {
+    const modes = getSavingsModes();
+    listEl.innerHTML = modes.map((m) => {
+      const sum = modeSumPercent(m.allocations || {});
+      const ok = Math.abs(sum - 100) < 0.0001;
+      return `
+        <div class="mode-item ${m.id === selectedId ? 'active' : ''}" data-mode-id="${m.id}">
+          <div style="min-width:0;">
+            <div class="name">${m.name || 'Perfil sin nombre'}</div>
+            <div class="meta">${ok ? '100%' : (Math.round(sum * 10) / 10) + '%'} · 4 columnas</div>
+          </div>
+          <button class="mode-delete" data-delete-id="${m.id}" title="Eliminar">✕</button>
+        </div>
+      `;
+    }).join('');
+
+    listEl.querySelectorAll('.mode-item').forEach((row) => {
+      row.addEventListener('click', (e) => {
+        const del = e.target && e.target.getAttribute && e.target.getAttribute('data-delete-id');
+        if (del) return;
+        const id = row.getAttribute('data-mode-id') || '';
+        const mode = getModeById(id);
+        if (mode) {
+          loadMode(mode);
+          renderList();
+        }
+      });
+    });
+
+    listEl.querySelectorAll('[data-delete-id]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = btn.getAttribute('data-delete-id');
+        const all = getSavingsModes();
+        const target = all.find(m => m.id === id);
+        if (target && target.isDefault && all.length > 1) {
+          showValidationMessage('No se puede eliminar el perfil por defecto. Marca otro como defecto primero.');
+          return;
+        }
+        const modes = all.filter(m => m.id !== id);
+        setSavingsModes(modes);
+        if (selectedId === id) {
+          selectedId = modes[0]?.id || '';
+          if (selectedId) {
+            const m = getModeById(selectedId);
+            if (m) loadMode(m);
+          } else {
+            nameInput.value = '';
+            inMonthly.value = 0;
+            inPersonal.value = 0;
+            inInvestment.value = 0;
+            inSavings.value = 0;
+            updateSum();
+          }
+        }
+        renderList();
+        renderIncomeModeSelectors();
+      });
+    });
+  }
+
+  function createNew() {
+    const id = 'mode-' + Date.now();
+    const mode = {
+      id,
+      name: 'Nuevo perfil',
+      allocations: { monthly: 40, personal: 20, investment: 20, savings: 20 }
+    };
+    const modes = getSavingsModes();
+    modes.unshift(mode);
+    setSavingsModes(modes);
+    loadMode(mode);
+    renderList();
+    renderIncomeModeSelectors();
+  }
+
+  createBtn.addEventListener('click', createNew);
+
+  saveBtn.addEventListener('click', () => {
+    if (!selectedId) {
+      showValidationMessage('Crea o selecciona un perfil primero');
+      return;
+    }
+    const name = (nameInput.value || '').trim();
+    if (!name) {
+      showValidationMessage('El perfil necesita un nombre');
+      return;
+    }
+    const alloc = readAlloc();
+    const sum = modeSumPercent(alloc);
+    if (Math.abs(sum - 100) > 0.0001) {
+      showValidationMessage('La suma de porcentajes debe ser 100%');
+      return;
+    }
+
+    const modes = getSavingsModes();
+    const idx = modes.findIndex(m => m.id === selectedId);
+    if (idx === -1) {
+      showValidationMessage('El perfil seleccionado no existe');
+      return;
+    }
+    const isDefault = !!defaultCheckbox.checked;
+    modes[idx] = { ...modes[idx], name, allocations: alloc, isDefault };
+    if (isDefault) {
+      modes.forEach((m, i) => {
+        if (i !== idx) m.isDefault = false;
+      });
+    } else if (!modes.some(m => m.isDefault)) {
+      // Si ninguno ha quedado como defecto, marcamos este para garantizar siempre uno
+      modes[idx].isDefault = true;
+    }
+    setSavingsModes(modes);
+    renderList();
+    renderIncomeModeSelectors();
+    showValidationMessage('Perfil guardado');
+  });
+
+  const modes = getSavingsModes();
+  if (modes.length === 0) createNew();
+  else loadMode(modes[0]);
+  renderList();
 }
 
 window.addIncome = addIncome;
