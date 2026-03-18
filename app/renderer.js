@@ -42,6 +42,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(validationBar);
   }
 
+  let autocompleteList = document.getElementById('category-autocomplete-list');
+  if (!autocompleteList) {
+    autocompleteList = document.createElement('datalist');
+    autocompleteList.id = 'category-autocomplete-list';
+    document.body.appendChild(autocompleteList);
+  }
+
   initializeTabs();
   initializeMonthlyTabs();
   initializeSavingsChart();
@@ -49,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
   ensureDefaultSavingsModes();
   initializeSettingsUI();
   renderIncomeModeSelectors();
+  updateCategoryAutocomplete();
 });
 
 function showValidationMessage(message) {
@@ -225,11 +233,13 @@ function initializeMonthlyTabs() {
             <div class="input-section" style="padding: 10px 0; margin-top: 15px;">
               <div class="input-group" style="flex-direction: column; gap: 8px;">
                 <input type="text" id="${month}-monthly-description" placeholder="Descripción" style="min-width: auto;">
+                <input type="text" id="${month}-monthly-category" list="category-autocomplete-list" placeholder="Categoría (ej. Combustible)" style="min-width: auto;">
                 <input type="number" id="${month}-monthly-amount" placeholder="Cantidad (€)" step="0.01" min="0" style="min-width: auto;">
                 <button onclick="addExpense('${month}', 'monthly')" style="margin: 0;">Añadir Gasto</button>
               </div>
             </div>
             <div class="expenses-list" id="${month}-monthly-list"></div>
+            <div id="${month}-monthly-category-summary" style="margin-top: 15px; display: flex; flex-direction: column; gap: 8px;"></div>
           </div>
           
           <div class="category-card personal">
@@ -243,11 +253,13 @@ function initializeMonthlyTabs() {
             <div class="input-section" style="padding: 10px 0; margin-top: 15px;">
               <div class="input-group" style="flex-direction: column; gap: 8px;">
                 <input type="text" id="${month}-personal-description" placeholder="Descripción" style="min-width: auto;">
+                <input type="text" id="${month}-personal-category" list="category-autocomplete-list" placeholder="Categoría (ej. Ropa, Ocio)" style="min-width: auto;">
                 <input type="number" id="${month}-personal-amount" placeholder="Cantidad (€)" step="0.01" min="0" style="min-width: auto;">
                 <button onclick="addExpense('${month}', 'personal')" style="margin: 0;">Añadir Gasto</button>
               </div>
             </div>
             <div class="expenses-list" id="${month}-personal-list"></div>
+            <div id="${month}-personal-category-summary" style="margin-top: 15px; display: flex; flex-direction: column; gap: 8px;"></div>
           </div>
           
           <div class="category-card investment">
@@ -321,6 +333,7 @@ function addIncome(month) {
 function addExpense(month, type) {
   const amountInput = document.getElementById(`${month}-${type}-amount`);
   const descriptionInput = document.getElementById(`${month}-${type}-description`);
+  const categoryInput = document.getElementById(`${month}-${type}-category`);
 
   const amount = parseFloat(amountInput.value) || 0;
   
@@ -364,6 +377,10 @@ function addExpense(month, type) {
     description,
     id: Date.now() // Unique ID for tracking
   };
+
+  if (type === 'monthly' || type === 'personal') {
+    expenseObj.category = categoryInput && categoryInput.value.trim() ? categoryInput.value.trim() : 'Sin Categoría';
+  }
   if (type === 'investment') {
     expenseObj.goalId = goalId;
   }
@@ -394,8 +411,12 @@ function addExpense(month, type) {
   } else {
     descriptionInput.value = ''; // resets select to empty
   }
+  if (categoryInput) {
+    categoryInput.value = '';
+  }
 
   updateSavingsChart();
+  updateCategoryAutocomplete();
 }
 
 function updateIncomeDisplay(month) {
@@ -621,32 +642,106 @@ function updateExpenseDisplay(month) {
 
   const monthlyExpenses = budget.expenses.map((e, i) => ({ ...e, globalIndex: i })).filter(e => e.type === 'monthly');
   monthlyExpenses.forEach((expense) => {
+    let categoryTag = '';
+    if (expense.category) {
+      categoryTag = `<span style="font-size: 10px; background: #e5e7eb; color: #4b5563; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">${expense.category}</span>`;
+    }
     monthlyExpensesList.innerHTML += `
       <div class="expense-item">
         <div>
-          <div class="label">${expense.description}</div>
+          <div class="label">${expense.description}${categoryTag}</div>
         </div>
         <div class="value">-€${expense.amount.toFixed(2)}</div>
         <button class="delete-item-btn" onclick="deleteExpense('${month}', ${expense.globalIndex})">✕</button>
       </div>
     `;
   });
+
+  // Calculate and render category summary for monthly expenses
+  const categorySummaryContainer = document.getElementById(`${month}-monthly-category-summary`);
+  if (categorySummaryContainer) {
+    const categoryTotals = {};
+    monthlyExpenses.forEach(exp => {
+      const cat = exp.category || 'Sin Categoría';
+      categoryTotals[cat] = (categoryTotals[cat] || 0) + exp.amount;
+    });
+
+    const categoriesHtml = Object.keys(categoryTotals).sort((a,b) => categoryTotals[b] - categoryTotals[a]).map(cat => {
+      const amt = categoryTotals[cat];
+      const pct = monthlyUsed > 0 ? ((amt / monthlyUsed) * 100).toFixed(0) : 0;
+      return `
+        <div style="display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #6b7280; box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-size: 13px;">
+          <strong style="color: #374151;">${cat}</strong>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="color: #6b7280; font-size: 11px;">${pct}%</span>
+            <span style="color: #ef4444; font-weight: 600;">€${amt.toFixed(2)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (Object.keys(categoryTotals).length > 0) {
+      categorySummaryContainer.innerHTML = `
+        <div style="font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; margin-bottom: 4px; border-top: 1px solid #e5e7eb; padding-top: 15px;">Resumen por Categorías</div>
+        ${categoriesHtml}
+      `;
+    } else {
+      categorySummaryContainer.innerHTML = '';
+    }
+  }
 
   const personalExpensesList = document.getElementById(`${month}-personal-list`);
   personalExpensesList.innerHTML = '';
 
   const personalExpenses = budget.expenses.map((e, i) => ({ ...e, globalIndex: i })).filter(e => e.type === 'personal');
   personalExpenses.forEach((expense) => {
+    let categoryTag = '';
+    if (expense.category) {
+      categoryTag = `<span style="font-size: 10px; background: #e5e7eb; color: #4b5563; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">${expense.category}</span>`;
+    }
     personalExpensesList.innerHTML += `
       <div class="expense-item">
         <div>
-          <div class="label">${expense.description}</div>
+          <div class="label">${expense.description}${categoryTag}</div>
         </div>
         <div class="value">-€${expense.amount.toFixed(2)}</div>
         <button class="delete-item-btn" onclick="deleteExpense('${month}', ${expense.globalIndex})">✕</button>
       </div>
     `;
   });
+
+  // Calculate and render category summary for personal expenses
+  const personalCategorySummaryContainer = document.getElementById(`${month}-personal-category-summary`);
+  if (personalCategorySummaryContainer) {
+    const categoryTotals = {};
+    personalExpenses.forEach(exp => {
+      const cat = exp.category || 'Sin Categoría';
+      categoryTotals[cat] = (categoryTotals[cat] || 0) + exp.amount;
+    });
+
+    const categoriesHtml = Object.keys(categoryTotals).sort((a,b) => categoryTotals[b] - categoryTotals[a]).map(cat => {
+      const amt = categoryTotals[cat];
+      const pct = personalUsed > 0 ? ((amt / personalUsed) * 100).toFixed(0) : 0;
+      return `
+        <div style="display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #6b7280; box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-size: 13px;">
+          <strong style="color: #374151;">${cat}</strong>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="color: #6b7280; font-size: 11px;">${pct}%</span>
+            <span style="color: #ef4444; font-weight: 600;">€${amt.toFixed(2)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (Object.keys(categoryTotals).length > 0) {
+      personalCategorySummaryContainer.innerHTML = `
+        <div style="font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; margin-bottom: 4px; border-top: 1px solid #e5e7eb; padding-top: 15px;">Resumen por Categorías</div>
+        ${categoriesHtml}
+      `;
+    } else {
+      personalCategorySummaryContainer.innerHTML = '';
+    }
+  }
 
   const investmentExpensesList = document.getElementById(`${month}-investment-list`);
   investmentExpensesList.innerHTML = '';
@@ -696,6 +791,29 @@ function deleteExpense(month, index) {
   budget.expenses.splice(index, 1);
   updateExpenseDisplay(month);
   updateSavingsChart();
+  updateCategoryAutocomplete();
+}
+
+function updateCategoryAutocomplete() {
+  const autocompleteList = document.getElementById('category-autocomplete-list');
+  if (!autocompleteList) return;
+
+  const uniqueCategories = new Set();
+  MONTHS.forEach(m => {
+    const b = monthlyBudgets[m];
+    if (b && b.expenses) {
+      b.expenses.forEach(e => {
+        if ((e.type === 'monthly' || e.type === 'personal') && e.category && e.category !== 'Sin Categoría') {
+          uniqueCategories.add(e.category);
+        }
+      });
+    }
+  });
+
+  autocompleteList.innerHTML = Array.from(uniqueCategories)
+    .sort()
+    .map(cat => `<option value="${cat}">`)
+    .join('');
 }
 
 function initializeSavingsChart() {
