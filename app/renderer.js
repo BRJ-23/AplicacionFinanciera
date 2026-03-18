@@ -195,8 +195,15 @@ function initializeMonthlyTabs() {
             <div class="amount" id="${month}-income-total">€0</div>
             <div class="input-section" style="padding: 10px 0; margin: 0;">
               <div class="input-group" style="flex-direction: column; gap: 8px;">
-                <label for="${month}-income-mode" style="font-size: 12px; color: #6b7280;">Modo</label>
+                <label for="${month}-income-mode" style="font-size: 12px; color: #6b7280;">Modo de Reparto</label>
                 <select id="${month}-income-mode" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                </select>
+                <select id="${month}-income-dest" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; margin-bottom: 4px;">
+                  <option value="reparto">Repartir (según Modo)</option>
+                  <option value="monthly">Directo a Gastos Mensuales</option>
+                  <option value="personal">Directo a Gastos Personales</option>
+                  <option value="investment">Directo a Inversiones</option>
+                  <option value="savings">Directo a Ahorro</option>
                 </select>
                 <input type="text" id="${month}-income-description" placeholder="Descripción (ej: Salario)" style="min-width: auto;">
                 <input type="number" id="${month}-income-amount" placeholder="Cantidad (€)" step="0.01" min="0" style="min-width: auto;">
@@ -276,9 +283,15 @@ function initializeMonthlyTabs() {
 function addIncome(month) {
   const amountInput = document.getElementById(`${month}-income-amount`);
   const descriptionInput = document.getElementById(`${month}-income-description`);
+  const destSelect = document.getElementById(`${month}-income-dest`);
 
   const amount = parseFloat(amountInput.value) || 0;
   const description = descriptionInput.value.trim();
+  const dest = destSelect ? destSelect.value : 'reparto';
+  let destLabel = 'Reparto';
+  if (destSelect && destSelect.selectedIndex >= 0) {
+    destLabel = destSelect.options[destSelect.selectedIndex].text;
+  }
 
   if (amount <= 0) {
     showValidationMessage('Por favor, ingrese una cantidad válida');
@@ -291,7 +304,7 @@ function addIncome(month) {
   }
 
   const budget = monthlyBudgets[month];
-  budget.incomes.push({ amount, description });
+  budget.incomes.push({ amount, description, dest, destLabel });
   budget.totalIncome = budget.incomes.reduce((sum, inc) => sum + inc.amount, 0);
 
   updateIncomeDisplay(month);
@@ -299,6 +312,7 @@ function addIncome(month) {
 
   amountInput.value = '';
   descriptionInput.value = '';
+  if (destSelect) destSelect.value = 'reparto';
 
   updateSavingsChart();
 }
@@ -391,10 +405,29 @@ function updateIncomeDisplay(month) {
   incomeList.innerHTML = '';
 
   budget.incomes.forEach((income, index) => {
+    let tagHtml = '';
+    if (income.dest && income.dest !== 'reparto') {
+      const colors = {
+        'monthly': '#ef4444',
+        'personal': '#f59e0b',
+        'investment': '#8b5cf6',
+        'savings': '#10b981'
+      };
+      const shortLabel = {
+        'monthly': 'Mensuales',
+        'personal': 'Personales',
+        'investment': 'Inversiones',
+        'savings': 'Ahorro'
+      }[income.dest];
+      tagHtml = `<span style="font-size: 10px; background: ${colors[income.dest]}20; color: ${colors[income.dest]}; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">➔ ${shortLabel}</span>`;
+    } else {
+      tagHtml = `<span style="font-size: 10px; background: #f3f4f6; color: #4b5563; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">Repartido</span>`;
+    }
+
     incomeList.innerHTML += `
       <div class="expense-item">
         <div>
-          <div class="label">${income.description}</div>
+          <div class="label">${income.description}${tagHtml}</div>
         </div>
         <div class="value" style="color: #10b981;">+€${income.amount.toFixed(2)}</div>
         <button class="delete-item-btn" onclick="deleteIncome('${month}', ${index})">✕</button>
@@ -405,7 +438,19 @@ function updateIncomeDisplay(month) {
 
 function updateBudgetAllocations(month) {
   const budget = monthlyBudgets[month];
-  const income = budget.totalIncome;
+  
+  const distributableIncome = budget.incomes
+    .filter(i => !i.dest || i.dest === 'reparto')
+    .reduce((sum, inc) => sum + inc.amount, 0);
+
+  const directMonthly = budget.incomes.filter(i => i.dest === 'monthly').reduce((sum, inc) => sum + inc.amount, 0);
+  const directPersonal = budget.incomes.filter(i => i.dest === 'personal').reduce((sum, inc) => sum + inc.amount, 0);
+  const directInvestment = budget.incomes.filter(i => i.dest === 'investment').reduce((sum, inc) => sum + inc.amount, 0);
+  const directSavings = budget.incomes.filter(i => i.dest === 'savings').reduce((sum, inc) => sum + inc.amount, 0);
+
+  // Update total internal property to ensure chart uses it correctly
+  budget.totalIncome = distributableIncome + directMonthly + directPersonal + directInvestment + directSavings;
+
   const mode = getModeForMonth(month);
   const sum = modeSumPercent(mode.allocations || {});
   if (Math.abs(sum - 100) > 0.0001) {
@@ -426,10 +471,10 @@ function updateBudgetAllocations(month) {
   if (investmentPctEl) investmentPctEl.textContent = String(Number(mode.allocations?.investment) || 0);
   if (savingsPctEl) savingsPctEl.textContent = String(Number(mode.allocations?.savings) || 0);
 
-  const monthlyExpenses = income * monthlyPct;
-  const personalExpenses = income * personalPct;
-  const investments = income * investPct;
-  const baseSavings = income * savingsPct;
+  const monthlyExpenses = (distributableIncome * monthlyPct) + directMonthly;
+  const personalExpenses = (distributableIncome * personalPct) + directPersonal;
+  const investments = (distributableIncome * investPct) + directInvestment;
+  const baseSavings = (distributableIncome * savingsPct) + directSavings;
 
   budget.monthlyExpenses = monthlyExpenses;
   budget.personalExpenses = personalExpenses;
