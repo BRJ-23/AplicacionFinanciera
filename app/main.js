@@ -77,7 +77,7 @@ function createWindow() {
   });
 
   win.loadFile('app/index.html');
-  win.maximize(); // For better usage Experience
+  win.maximize();
 }
 
 app.whenReady().then(createWindow);

@@ -31,7 +31,7 @@ function getCustomFunds() {
     const raw = localStorage.getItem('customFunds');
     const parsed = raw ? JSON.parse(raw) : [];
     if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch (e) {}
+  } catch (e) { }
   return [
     { id: 'fund-default', name: 'Cuenta Principal', amount: 0, isDefault: true }
   ];
@@ -97,21 +97,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadAvailableYears() {
   if (!window.api) return;
-  
+
   APP_SETTINGS = await window.api.getSettings();
-  
+
   availableYears = await window.api.getYears();
   if (availableYears.length === 0) {
     availableYears = [new Date().getFullYear()];
     await window.api.addYear(availableYears[0]);
   }
-  
+
   const storageYear = parseInt(APP_SETTINGS['currentYearSelected'], 10);
   currentYear = availableYears.includes(storageYear) ? storageYear : (availableYears.includes(new Date().getFullYear()) ? new Date().getFullYear() : availableYears[0]);
-}
-
-async function saveAvailableYears() {
-  // individual years are saved via addYear directly now
 }
 
 async function loadYearData(year) {
@@ -139,22 +135,18 @@ async function loadYearData(year) {
   globalSavingsWithdrawals = raw.globalWithdrawals || [];
 }
 
-function saveYearData() {
-  // Deprecated. We now persist immediately per action optimistically into SQL endpoints via IPC
-}
-
 function renderYearSidebar() {
   const list = document.getElementById('year-list');
   if (!list) return;
-  
-  const years = availableYears.sort((a,b) => b-a);
+
+  const years = availableYears.sort((a, b) => b - a);
   list.innerHTML = years.map((y, index) => {
     const isSelected = y === currentYear;
     const borderStyle = index < years.length - 1 ? 'border-bottom: 1px solid #e5e7eb;' : 'border-bottom: none;';
     const bg = isSelected ? '#f3f4f6' : 'transparent';
     const color = isSelected ? '#111827' : '#6b7280';
     const shadow = isSelected ? 'box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);' : '';
-    
+
     return `
       <div style="position: relative; width: 100%; border: none; ${borderStyle}">
         <button onclick="selectYear(${y})" oncontextmenu="showYearMenu(event, ${y})" style="width: 100%; padding: 12px 10px; font-size: 15px; font-weight: ${isSelected ? '800' : '600'}; background: ${bg}; color: ${color}; border: none; cursor: pointer; transition: all 0.2s; text-align: left; ${shadow}" onmouseover="if(${y} !== ${currentYear}) { this.style.background='#f9fafb'; this.style.color='#374151'; }" onmouseout="if(${y} !== ${currentYear}) { this.style.background='transparent'; this.style.color='#6b7280'; }">
@@ -195,10 +187,9 @@ function selectYear(year) {
   if (currentYear === year) return;
   loadYearData(year);
   renderYearSidebar();
-  
-  // Re-render essentially everything
-  initializeMonthlyTabs(); // Re-creates DOM elements for newly loaded budgets
-  renderIncomeModeSelectors(); // Rebinds modes
+
+  initializeMonthlyTabs();
+  renderIncomeModeSelectors();
   updateSavingsChart();
   renderInvestmentGoals();
   updateCategoryAutocomplete();
@@ -232,7 +223,7 @@ function openEditYearModal(oldYear) {
   const input = document.getElementById('edit-year-input');
   input.value = oldYear;
   document.getElementById('edit-year-modal').classList.add('open');
-  
+
   setTimeout(() => {
     input.focus();
     input.select();
@@ -246,12 +237,12 @@ function closeEditYearModal() {
 function saveEditedYear() {
   const oldYear = parseInt(document.getElementById('edit-year-old').value, 10);
   const newYear = parseInt(document.getElementById('edit-year-input').value, 10);
-  
+
   if (!newYear || newYear < 2000 || newYear > 2100) {
     showValidationMessage('Introduce un año válido');
     return;
   }
-  
+
   if (oldYear === newYear) {
     closeEditYearModal();
     return;
@@ -266,16 +257,15 @@ function saveEditedYear() {
   if (index > -1) {
     availableYears[index] = newYear;
     if (window.api) window.api.updateYear(oldYear, newYear);
-    
+
     closeEditYearModal();
 
     if (currentYear === oldYear) {
-      // selecting resets current state
       currentYear = null;
       selectYear(newYear);
     } else {
       renderYearSidebar();
-      updateSavingsChart(); // to recompute global savings if needed
+      updateSavingsChart();
     }
   }
 }
@@ -285,7 +275,7 @@ function deleteYear(y) {
     showValidationMessage('Debes mantener al menos un año.');
     return;
   }
-  
+
   document.getElementById('delete-year-target').value = y;
   document.getElementById('delete-year-message').textContent = `¿Estás seguro de que deseas eliminar el año ${y} y todos sus datos asociados?`;
   document.getElementById('delete-year-modal').classList.add('open');
@@ -298,12 +288,12 @@ function closeDeleteYearModal() {
 function confirmDeleteYear() {
   const y = parseInt(document.getElementById('delete-year-target').value, 10);
   if (!y) return;
-  
+
   availableYears = availableYears.filter(year => year !== y);
   if (window.api) window.api.deleteYear(y);
-  
+
   closeDeleteYearModal();
-  
+
   if (currentYear === y) {
     // If we're viewing the deleted year, switch to the first available one
     currentYear = null;
@@ -580,7 +570,7 @@ function addExpense(month, type) {
   const categoryInput = document.getElementById(`${month}-${type}-category`);
 
   const amount = parseFloat(amountInput.value) || 0;
-  
+
   let description = '';
   let goalId = null;
 
@@ -615,9 +605,9 @@ function addExpense(month, type) {
     return;
   }
 
-  const expenseObj = { 
-    type, 
-    amount, 
+  const expenseObj = {
+    type,
+    amount,
     description,
     id: 'exp-' + Math.random().toString(36).substr(2, 9)
   };
@@ -710,7 +700,7 @@ function updateIncomeDisplay(month) {
 
 function updateBudgetAllocations(month) {
   const budget = monthlyBudgets[month];
-  
+
   const distributableIncome = budget.incomes
     .filter(i => !i.dest || i.dest === 'reparto')
     .reduce((sum, inc) => sum + inc.amount, 0);
@@ -916,7 +906,7 @@ function updateExpenseDisplay(month) {
       categoryTotals[cat] = (categoryTotals[cat] || 0) + exp.amount;
     });
 
-    const categoriesHtml = Object.keys(categoryTotals).sort((a,b) => categoryTotals[b] - categoryTotals[a]).map(cat => {
+    const categoriesHtml = Object.keys(categoryTotals).sort((a, b) => categoryTotals[b] - categoryTotals[a]).map(cat => {
       const amt = categoryTotals[cat];
       const pct = monthlyUsed > 0 ? ((amt / monthlyUsed) * 100).toFixed(0) : 0;
       return `
@@ -969,7 +959,7 @@ function updateExpenseDisplay(month) {
       categoryTotals[cat] = (categoryTotals[cat] || 0) + exp.amount;
     });
 
-    const categoriesHtml = Object.keys(categoryTotals).sort((a,b) => categoryTotals[b] - categoryTotals[a]).map(cat => {
+    const categoriesHtml = Object.keys(categoryTotals).sort((a, b) => categoryTotals[b] - categoryTotals[a]).map(cat => {
       const amt = categoryTotals[cat];
       const pct = personalUsed > 0 ? ((amt / personalUsed) * 100).toFixed(0) : 0;
       return `
@@ -1200,7 +1190,7 @@ function updateSavingsChart() {
 
   savingsChart.data.datasets[0].data = savingsData;
   savingsChart.update();
-  
+
   saveYearData();
 
   if (typeof updateGlobalSavings === 'function') {
@@ -1210,7 +1200,7 @@ function updateSavingsChart() {
 
 function updateGlobalSavings() {
   let totalAppSavings = 0;
-  
+
   availableYears.forEach(year => {
     const raw = localStorage.getItem('finanzasData_' + year);
     let yearBudgets = {};
@@ -1225,11 +1215,11 @@ function updateGlobalSavings() {
     } else {
       yearBudgets = getEmptyBudgets();
     }
-    
+
     MONTHS.forEach(month => {
       const budget = yearBudgets[month];
       if (!budget || budget.totalIncome === 0) return;
-      
+
       const monthlyUsed = budget.expenses.filter(e => e.type === 'monthly').reduce((sum, e) => sum + e.amount, 0);
       const personalUsed = budget.expenses.filter(e => e.type === 'personal').reduce((sum, e) => sum + e.amount, 0);
       const investmentUsed = budget.expenses.filter(e => e.type === 'investment').reduce((sum, e) => sum + e.amount, 0);
@@ -1375,7 +1365,7 @@ function deleteCustomFund(id) {
     showValidationMessage('No puedes borrar el fondo por defecto. Marca otro como defecto primero.');
     return;
   }
-  
+
   customFunds = customFunds.filter(f => f.id !== id);
   if (window.api) window.api.deleteCustomFund(id);
   updateSavingsChart();
@@ -1445,7 +1435,7 @@ function addFundsToGoal(goalId) {
 
   const goal = investmentGoals.find(g => g.id === goalId);
   if (goal) {
-    if (!goal.transactions) goal.transactions = []; // handle old data
+    if (!goal.transactions) goal.transactions = [];
     const tx = {
       id: 'tx-' + Math.random().toString(36).substr(2, 9),
       amount: amount,
@@ -1599,7 +1589,7 @@ function renderInvestmentGoals() {
       </div>
     `;
   }).join('');
-  
+
   saveYearData();
   updateInvestmentSelects();
 }
@@ -1609,7 +1599,7 @@ function updateInvestmentSelects() {
     const select = document.getElementById(`${month}-investment-description`);
     if (select && select.tagName === 'SELECT') {
       const currentVal = select.value;
-      select.innerHTML = '<option value="">Selecciona un fondo...</option>' + 
+      select.innerHTML = '<option value="">Selecciona un fondo...</option>' +
         investmentGoals.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
       // Restore previous value if it still exists
       if (investmentGoals.some(g => g.id === currentVal)) {
@@ -1766,21 +1756,21 @@ function initializeModesUI() {
           selectedId = modes[0]?.id || '';
           if (selectedId) {
             const m = getModeById(selectedId);
-        if (m) loadMode(m);
-      } else {
-        nameInput.value = '';
-        inMonthly.value = 0;
-        inPersonal.value = 0;
-        inInvestment.value = 0;
-        inSavings.value = 0;
-        updateSum();
-      }
-    }
-    renderList();
-    renderIncomeModeSelectors();
-  });
-});
-}
+            if (m) loadMode(m);
+          } else {
+            nameInput.value = '';
+            inMonthly.value = 0;
+            inPersonal.value = 0;
+            inInvestment.value = 0;
+            inSavings.value = 0;
+            updateSum();
+          }
+        }
+        renderList();
+        renderIncomeModeSelectors();
+      });
+    });
+  }
 
   function createNew() {
     const id = 'mode-' + Date.now();
@@ -1829,7 +1819,7 @@ function initializeModesUI() {
         if (i !== idx) m.isDefault = false;
       });
     } else if (!modes.some(m => m.isDefault)) {
-      // Si ninguno ha quedado como defecto, marcamos este para garantizar siempre uno
+      // If none has remained as default, we mark this one to guarantee always one
       modes[idx].isDefault = true;
     }
     setSavingsModes(modes);
@@ -1922,10 +1912,10 @@ function registerBeca() {
   for (let i = 0; i < duration; i++) {
     const targetIndex = startIndex + i;
     if (targetIndex >= MONTHS.length) break; // Don't overflow the year
-    
+
     const targetMonth = MONTHS[targetIndex];
     const budget = monthlyBudgets[targetMonth];
-    
+
     const incObj = {
       id: 'inc-' + Math.random().toString(36).substr(2, 9),
       amount: monthlyAmount,
@@ -1935,7 +1925,7 @@ function registerBeca() {
     };
     budget.incomes.push(incObj);
     if (window.api) window.api.addIncome({ ...incObj, year: currentYear, month: targetMonth });
-    
+
     budget.totalIncome = budget.incomes.reduce((sum, inc) => sum + inc.amount, 0);
     updateIncomeDisplay(targetMonth);
     updateBudgetAllocations(targetMonth);
@@ -1963,7 +1953,7 @@ function registerSavingsWithdrawal() {
   }
 
   const budget = monthlyBudgets[destMonth];
-  
+
   // Track withdrawal internally instead of negative income
   const withdrawalObj = {
     id: 'with-' + Math.random().toString(36).substr(2, 9),
