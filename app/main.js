@@ -24,6 +24,7 @@ function createWindow() {
 
   win.loadFile('app/index.html');
   win.maximize();
+  // win.webContents.openDevTools();
 }
 
 app.whenReady().then(createWindow);

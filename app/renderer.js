@@ -74,27 +74,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.appendChild(autocompleteList);
   }
 
-
-
-  await loadAvailableYears();
-  await loadYearData(currentYear);
-
-  customFunds = await window.api.getCustomFunds();
-  if (!customFunds || customFunds.length === 0) {
-    const defaultFund = { id: 'fund-default', name: 'Cuenta Principal', amount: 0, isDefault: true };
-    await window.api.addCustomFund(defaultFund);
-    customFunds = [defaultFund];
-  }
-
-  renderYearSidebar();
+  // Initialize UI components first so they are responsive immediately
   initializeTabs();
   initializeMonthlyTabs();
-  initializeSavingsChart();
-  renderInvestmentGoals();
-  await ensureDefaultSavingsModes();
   initializeSettingsUI();
-  await renderIncomeModeSelectors();
-  updateCategoryAutocomplete();
+
+  try {
+    await loadAvailableYears();
+    await loadYearData(currentYear);
+
+    if (window.api) {
+      customFunds = await window.api.getCustomFunds();
+      if (!customFunds || customFunds.length === 0) {
+        const defaultFund = { id: 'fund-default', name: 'Cuenta Principal', amount: 0, isDefault: true };
+        await window.api.addCustomFund(defaultFund);
+        customFunds = [defaultFund];
+      }
+    }
+
+    renderYearSidebar();
+    initializeSavingsChart();
+    renderInvestmentGoals();
+    await ensureDefaultSavingsModes();
+    await renderIncomeModeSelectors();
+    updateCategoryAutocomplete();
+  } catch (error) {
+    console.error('Error during initial data loading:', error);
+    showValidationMessage('Error al cargar datos. Algunas funciones podrían no estar disponibles.');
+  }
 });
 
 async function loadAvailableYears() {
@@ -1726,7 +1733,7 @@ function initializeSettingsUI() {
   };
   const title = document.getElementById('settings-title');
 
-  if (!overlay || !openButton || !closeButton || !title) return;
+  if (!overlay || !closeButton || !title) return;
 
   function openSettings() {
     overlay.classList.add('open');
@@ -1738,7 +1745,11 @@ function initializeSettingsUI() {
     overlay.setAttribute('aria-hidden', 'true');
   }
 
-  openButton.addEventListener('click', openSettings);
+  // Expose globally so the HTML onclick attribute can call them directly
+  window.openSettingsPanel = openSettings;
+  window.closeSettingsPanel = closeSettings;
+
+  if (openButton) openButton.addEventListener('click', openSettings);
   closeButton.addEventListener('click', closeSettings);
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) closeSettings();

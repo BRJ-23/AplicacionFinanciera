@@ -915,7 +915,7 @@
       <div id="main" class="tab-content active">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
           <h2 style="margin: 0;">Gráfico de Ahorro Mensual</h2>
-          <button id="open-settings-button" title="Ajustes" style="padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: bold; background: transparent; color: #4b5563; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='transparent'">Ajustes ☰</button>
+          <button id="open-settings-button" title="Ajustes" onclick="openSettingsPanel && openSettingsPanel()" style="padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: bold; background: transparent; color: #4b5563; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='transparent'">Ajustes ☰</button>
         </div>
         
         <div style="display: flex; gap: 20px; align-items: stretch;">
@@ -1009,7 +1009,7 @@
       <div class="settings-content">
         <div class="settings-header">
           <h3 id="settings-title">General</h3>
-          <button class="settings-close" id="close-settings-button" aria-label="Cerrar ajustes">✕</button>
+          <button class="settings-close" id="close-settings-button" onclick="closeSettingsPanel && closeSettingsPanel()" aria-label="Cerrar ajustes">✕</button>
         </div>
 
         <div id="settings-section-general">
