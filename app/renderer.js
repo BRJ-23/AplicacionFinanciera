@@ -28,20 +28,7 @@ let activeChartIndex = 0; // 0 = monthly savings, 1 = cumulative
 let validationMessageTimeout = null;
 let customFunds = [];
 
-function getCustomFunds() {
-  try {
-    const raw = localStorage.getItem('customFunds');
-    const parsed = raw ? JSON.parse(raw) : [];
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-  } catch (e) { }
-  return [
-    { id: 'fund-default', name: 'Cuenta Principal', amount: 0, isDefault: true }
-  ];
-}
-
-function saveCustomFunds(funds) {
-  localStorage.setItem('customFunds', JSON.stringify(funds));
-}
+// Las funciones getCustomFunds y saveCustomFunds han sido reemplazadas por la API de SQLite
 
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -74,12 +61,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.appendChild(autocompleteList);
   }
 
-  // Initialize UI components first so they are responsive immediately
-  initializeTabs();
-  initializeMonthlyTabs();
-  initializeSettingsUI();
-
   try {
+    // 1. Data loading first
     await loadAvailableYears();
     await loadYearData(currentYear);
 
@@ -92,10 +75,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
+    // 2. Ensure defaults are in place (uses loaded APP_SETTINGS)
+    await ensureDefaultSavingsModes();
+
+    // 3. UI Initialization (after settings are loaded)
+    initializeTabs();
+    initializeMonthlyTabs();
+    await initializeSettingsUI();
+
     renderYearSidebar();
     initializeSavingsChart();
     renderInvestmentGoals();
-    await ensureDefaultSavingsModes();
     await renderIncomeModeSelectors();
     updateCategoryAutocomplete();
   } catch (error) {
@@ -333,16 +323,22 @@ function getSavingsModes() {
   return APP_SETTINGS['savingsModes'] || [];
 }
 
-function setSavingsModes(modes) {
+async function setSavingsModes(modes) {
   APP_SETTINGS['savingsModes'] = modes;
-  if (window.api) window.api.saveSetting('savingsModes', modes);
+  if (window.api) {
+    try {
+      await window.api.saveSetting('savingsModes', modes);
+    } catch (err) {
+      console.error('setSavingsModes: Error al guardar en DB:', err);
+    }
+  }
 }
 
 async function ensureDefaultSavingsModes() {
   const existing = getSavingsModes();
   if (existing.length > 0) return;
 
-  setSavingsModes([
+  await setSavingsModes([
     { id: 'mode-default-ahorrador', name: 'Ahorrador', isDefault: true, allocations: { monthly: 40, personal: 20, investment: 20, savings: 20 } },
     { id: 'mode-default-inversion', name: 'Inversion', isDefault: false, allocations: { monthly: 40, personal: 20, investment: 35, savings: 5 } }
   ]);
@@ -1192,7 +1188,7 @@ function initializeSavingsChart() {
 }
 
 // Switches between chart 0 (monthly) and chart 1 (cumulative)
-function switchChart(direction) {
+async function switchChart(direction) {
   activeChartIndex = (activeChartIndex + direction + 2) % 2;
 
   const savingsCanvas = document.getElementById('savingsChart');
@@ -1207,40 +1203,63 @@ function switchChart(direction) {
     savingsCanvas.style.display = 'none';
     cumulativeCanvas.style.display = '';
     if (indicator) indicator.textContent = '2 / 2';
-    updateCumulativeChart();
+    await updateCumulativeChart();
   }
 }
 
 // Calculates cumulative savings per month, starting from prior-year balances
-function updateCumulativeChart() {
+async function updateCumulativeChart() {
   if (!cumulativeChart) return;
 
   // ── Baseline: savings from all previous years ─────────────────────────
   let baseline = 0;
   const prevYears = availableYears.filter(y => y < currentYear);
 
-  prevYears.forEach(year => {
-    // Try to read from SQLite cache via localStorage fallback (same as updateGlobalSavings)
-    const raw = localStorage.getItem('finanzasData_' + year);
+  for (const year of prevYears) {
     let yearBudgets = {};
     let yearWithdrawals = [];
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      yearBudgets = parsed.monthlyBudgets || getEmptyBudgets();
-      yearWithdrawals = parsed.globalSavingsWithdrawals || [];
+
+    if (window.api) {
+      const raw = await window.api.getYearData(year);
+      yearBudgets = getEmptyBudgets();
+      for (const inc of raw.incomes) {
+        yearBudgets[inc.month].incomes.push(inc);
+        yearBudgets[inc.month].totalIncome += inc.amount;
+      }
+      for (const exp of raw.expenses) {
+        yearBudgets[exp.month].expenses.push(exp);
+      }
+      yearWithdrawals = raw.globalWithdrawals || [];
     } else {
       yearBudgets = getEmptyBudgets();
     }
+
     MONTHS.forEach(m => {
       const b = yearBudgets[m];
       if (!b || b.totalIncome === 0) return;
+
+      // Usando allocations por defecto para años pasados (simplificación coherente con updateGlobalSavings)
+      const mPct = 40/100, pPct = 20/100, iPct = 20/100, sPct = 20/100;
+
+      const distInc = b.incomes.filter(i => !i.dest || i.dest === 'reparto').reduce((s, inc) => s + inc.amount, 0);
+      const dM = b.incomes.filter(i => i.dest === 'monthly').reduce((s, inc) => s + inc.amount, 0);
+      const dP = b.incomes.filter(i => i.dest === 'personal').reduce((s, inc) => s + inc.amount, 0);
+      const dI = b.incomes.filter(i => i.dest === 'investment').reduce((s, inc) => s + inc.amount, 0);
+      const dS = b.incomes.filter(i => i.dest === 'savings').reduce((s, inc) => s + inc.amount, 0);
+
+      const mB = (distInc * mPct) + dM;
+      const pB = (distInc * pPct) + dP;
+      const iB = (distInc * iPct) + dI;
+      const sB = (distInc * sPct) + dS;
+
       const mUsed = b.expenses.filter(e => e.type === 'monthly').reduce((s, e) => s + e.amount, 0);
       const pUsed = b.expenses.filter(e => e.type === 'personal').reduce((s, e) => s + e.amount, 0);
       const iUsed = b.expenses.filter(e => e.type === 'investment').reduce((s, e) => s + e.amount, 0);
-      baseline += b.savings + (b.monthlyExpenses - mUsed) + (b.personalExpenses - pUsed) + (b.investments - iUsed);
+
+      baseline += (sB + (mB - mUsed) + (pB - pUsed) + (iB - iUsed));
     });
     baseline -= yearWithdrawals.reduce((s, w) => s + w.amount, 0);
-  });
+  }
 
   // Add non-default fund amounts (manual balances independent of the app calculation)
   customFunds.forEach(f => { if (!f.isDefault) baseline += f.amount; });
@@ -1254,6 +1273,8 @@ function updateCumulativeChart() {
     const mUsed = budget.expenses.filter(e => e.type === 'monthly').reduce((s, e) => s + e.amount, 0);
     const pUsed = budget.expenses.filter(e => e.type === 'personal').reduce((s, e) => s + e.amount, 0);
     const iUsed = budget.expenses.filter(e => e.type === 'investment').reduce((s, e) => s + e.amount, 0);
+
+    // Para el año actual sí tenemos las allocations correctas en budget.monthlyExpenses etc.
     const monthlySavings = budget.savings
       + (budget.monthlyExpenses - mUsed)
       + (budget.personalExpenses - pUsed)
@@ -1276,7 +1297,7 @@ function handleChartResize() {
   if (cumulativeChart) cumulativeChart.resize();
 }
 
-function updateSavingsChart() {
+async function updateSavingsChart() {
   if (!savingsChart) return;
 
   const savingsData = MONTHS.map(month => {
@@ -1300,52 +1321,95 @@ function updateSavingsChart() {
 
   // Keep cumulative chart in sync if it is currently visible
   if (activeChartIndex === 1) {
-    updateCumulativeChart();
+    await updateCumulativeChart();
   }
 
   saveYearData();
 
   if (typeof updateGlobalSavings === 'function') {
-    updateGlobalSavings();
+    await updateGlobalSavings();
   }
 }
 
-function updateGlobalSavings() {
+function saveYearData() {
+  // En la versión SQLite, los datos se guardan individualmente tras cada cambio
+  // mediante window.api.addIncome, addExpense, etc.
+  // Esta función se mantiene para compatibilidad con llamadas existentes.
+}
+
+async function updateGlobalSavings() {
   let totalAppSavings = 0;
 
-  availableYears.forEach(year => {
-    const raw = localStorage.getItem('finanzasData_' + year);
+  for (const year of availableYears) {
     let yearBudgets = {};
     let yearWithdrawals = [];
+
     if (year === currentYear) {
       yearBudgets = monthlyBudgets;
       yearWithdrawals = globalSavingsWithdrawals;
-    } else if (raw) {
-      const parsed = JSON.parse(raw);
-      yearBudgets = parsed.monthlyBudgets || getEmptyBudgets();
-      yearWithdrawals = parsed.globalSavingsWithdrawals || [];
     } else {
-      yearBudgets = getEmptyBudgets();
+      if (window.api) {
+        const raw = await window.api.getYearData(year);
+        // Reconstruimos el objeto monthlyBudgets para el año histórico
+        yearBudgets = getEmptyBudgets();
+        for (const inc of raw.incomes) {
+          yearBudgets[inc.month].incomes.push(inc);
+          yearBudgets[inc.month].totalIncome += inc.amount;
+        }
+        for (const exp of raw.expenses) {
+          yearBudgets[exp.month].expenses.push(exp);
+        }
+        yearWithdrawals = raw.globalWithdrawals || [];
+      } else {
+        yearBudgets = getEmptyBudgets();
+      }
     }
 
     MONTHS.forEach(month => {
       const budget = yearBudgets[month];
       if (!budget || budget.totalIncome === 0) return;
 
-      const monthlyUsed = budget.expenses.filter(e => e.type === 'monthly').reduce((sum, e) => sum + e.amount, 0);
-      const personalUsed = budget.expenses.filter(e => e.type === 'personal').reduce((sum, e) => sum + e.amount, 0);
-      const investmentUsed = budget.expenses.filter(e => e.type === 'investment').reduce((sum, e) => sum + e.amount, 0);
+      const mode = (year === currentYear) ? getModeForMonth(month) : { allocations: { monthly: 40, personal: 20, investment: 20, savings: 20 } };
+      // Nota: Para años pasados, si no guardamos el modo específico usado en aquel entonces en la DB,
+      // aquí se usará el por defecto. Si se desea precisión histórica, habría que guardar el modeId en cada mes en la DB.
+      // Sin embargo, para agilizar el cálculo del ahorro acumulado, usamos los valores calculados.
 
-      const monthlyLeftover = budget.monthlyExpenses - monthlyUsed;
-      const personalLeftover = budget.personalExpenses - personalUsed;
-      const investmentLeftover = budget.investments - investmentUsed;
+      // Recalculamos allocations si es necesario (para años históricos)
+      // En una implementación ideal, estos valores estarían cacheados o guardados.
+      const distributableIncome = budget.incomes
+        .filter(i => !i.dest || i.dest === 'reparto')
+        .reduce((sum, inc) => sum + inc.amount, 0);
 
-      totalAppSavings += (budget.savings + monthlyLeftover + personalLeftover + investmentLeftover);
+      const directMonthly = budget.incomes.filter(i => i.dest === 'monthly').reduce((sum, inc) => sum + inc.amount, 0);
+      const directPersonal = budget.incomes.filter(i => i.dest === 'personal').reduce((sum, inc) => sum + inc.amount, 0);
+      const directInvestment = budget.incomes.filter(i => i.dest === 'investment').reduce((sum, inc) => sum + inc.amount, 0);
+      const directSavings = budget.incomes.filter(i => i.dest === 'savings').reduce((sum, inc) => sum + inc.amount, 0);
+
+      // Usamos 40/20/20/20 como fallback si no es el año actual (simplificación)
+      const mPct = (mode.allocations?.monthly || 40) / 100;
+      const pPct = (mode.allocations?.personal || 20) / 100;
+      const iPct = (mode.allocations?.investment || 20) / 100;
+      const sPct = (mode.allocations?.savings || 20) / 100;
+
+      const mBudget = (distributableIncome * mPct) + directMonthly;
+      const pBudget = (distributableIncome * pPct) + directPersonal;
+      const iBudget = (distributableIncome * iPct) + directInvestment;
+      const sBase = (distributableIncome * sPct) + directSavings;
+
+      const mUsed = budget.expenses.filter(e => e.type === 'monthly').reduce((sum, e) => sum + e.amount, 0);
+      const pUsed = budget.expenses.filter(e => e.type === 'personal').reduce((sum, e) => sum + e.amount, 0);
+      const iUsed = budget.expenses.filter(e => e.type === 'investment').reduce((sum, e) => sum + e.amount, 0);
+
+      const mLeftover = mBudget - mUsed;
+      const pLeftover = pBudget - pUsed;
+      const iLeftover = iBudget - iUsed;
+
+      totalAppSavings += (sBase + mLeftover + pLeftover + iLeftover);
     });
 
     const totalDeductions = yearWithdrawals.reduce((sum, w) => sum + w.amount, 0);
     totalAppSavings -= totalDeductions;
-  });
+  }
 
   let globalTotal = 0;
   customFunds.forEach(fund => {
@@ -1721,7 +1785,7 @@ function updateInvestmentSelects() {
   });
 }
 
-function initializeSettingsUI() {
+async function initializeSettingsUI() {
   const overlay = document.getElementById('settings-overlay');
   const openButton = document.getElementById('open-settings-button');
   const closeButton = document.getElementById('close-settings-button');
@@ -1777,10 +1841,10 @@ function initializeSettingsUI() {
   const btnSavings = document.getElementById('savings-withdrawal-register');
   if (btnSavings) btnSavings.addEventListener('click', registerSavingsWithdrawal);
 
-  initializeModesUI();
+  await initializeModesUI();
 }
 
-function initializeModesUI() {
+async function initializeModesUI() {
   const listEl = document.getElementById('modes-items');
   const createBtn = document.getElementById('modes-create');
   const saveBtn = document.getElementById('modes-save');
@@ -1857,7 +1921,7 @@ function initializeModesUI() {
     });
 
     listEl.querySelectorAll('[data-delete-id]').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const id = btn.getAttribute('data-delete-id');
         const all = getSavingsModes();
@@ -1867,7 +1931,7 @@ function initializeModesUI() {
           return;
         }
         const modes = all.filter(m => m.id !== id);
-        setSavingsModes(modes);
+        await setSavingsModes(modes);
         if (selectedId === id) {
           selectedId = modes[0]?.id || '';
           if (selectedId) {
@@ -1888,7 +1952,7 @@ function initializeModesUI() {
     });
   }
 
-  function createNew() {
+  async function createNew() {
     const id = 'mode-' + Date.now();
     const mode = {
       id,
@@ -1897,15 +1961,17 @@ function initializeModesUI() {
     };
     const modes = getSavingsModes();
     modes.unshift(mode);
-    setSavingsModes(modes);
+    await setSavingsModes(modes);
     loadMode(mode);
     renderList();
     renderIncomeModeSelectors();
   }
 
-  createBtn.addEventListener('click', createNew);
+  createBtn.addEventListener('click', async () => {
+    await createNew();
+  });
 
-  saveBtn.addEventListener('click', () => {
+  saveBtn.addEventListener('click', async () => {
     if (!selectedId) {
       showValidationMessage('Crea o selecciona un perfil primero');
       return;
@@ -1938,15 +2004,19 @@ function initializeModesUI() {
       // If none has remained as default, we mark this one to guarantee always one
       modes[idx].isDefault = true;
     }
-    setSavingsModes(modes);
+    await setSavingsModes(modes);
     renderList();
     renderIncomeModeSelectors();
-    showValidationMessage('Perfil guardado');
+    showValidationMessage('Perfil guardado correctamente');
   });
 
   const modes = getSavingsModes();
-  if (modes.length === 0) createNew();
-  else loadMode(modes[0]);
+
+  if (modes.length === 0) {
+    await createNew();
+  } else {
+    loadMode(modes[0]);
+  }
   renderList();
 }
 
