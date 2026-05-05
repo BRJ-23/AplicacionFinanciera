@@ -1,0 +1,14 @@
+      <div id="year-selection" class="tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+          <h2 style="margin: 0;">Seleccionar Año Activo</h2>
+          <button onclick="openNewYearModal()"
+            style="display: flex; align-items: center; gap: 8px; padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s;"
+            onmouseover="this.style.background='#2563eb';" onmouseout="this.style.background='#3b82f6';">
+            <span>+ Añadir Año</span>
+          </button>
+        </div>
+        <div id="year-list"
+          style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
+          <!-- Years render by JS -->
+        </div>
+      </div>

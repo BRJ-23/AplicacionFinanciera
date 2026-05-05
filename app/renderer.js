@@ -63,8 +63,39 @@ let customFunds = [];
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
+// ─── Carga Dinámica de Componentes HTML ────────────────────────────────────────
+
+async function loadHTMLFragments() {
+  const fragments = [
+    { url: 'views/month-template.html', targetId: 'templates-container' },
+    { url: 'views/sidebar.html', targetId: 'sidebar-container' },
+    { url: 'views/main-dashboard.html', targetId: 'main-dashboard-container' },
+    { url: 'views/funds-goals.html', targetId: 'funds-goals-container' },
+    { url: 'views/settings.html', targetId: 'settings-container' },
+    { url: 'views/year-selection.html', targetId: 'year-selection-container' },
+    { url: 'views/modals.html', targetId: 'modals-container' }
+  ];
+
+  for (const frag of fragments) {
+    try {
+      const response = await fetch(frag.url);
+      if (response.ok) {
+        const html = await response.text();
+        document.getElementById(frag.targetId).innerHTML = html;
+      } else {
+        console.error(`Failed to fetch ${frag.url}: ${response.statusText}`);
+      }
+    } catch (err) {
+      console.error(`Error loading fragment ${frag.url}:`, err);
+    }
+  }
+}
+
 // Initialize application
 document.addEventListener('DOMContentLoaded', async () => {
+  // 0. Cargar el HTML primero
+  await loadHTMLFragments();
+
   let validationBar = document.getElementById('validation-bar');
   if (!validationBar) {
     validationBar = document.createElement('div');
@@ -118,6 +149,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderInvestmentGoals();
     await renderIncomeModeSelectors();
     updateCategoryAutocomplete();
+    
+    // 4. Mostrar la aplicación
+    const appContainer = document.getElementById('main-app-container');
+    if (appContainer) appContainer.style.opacity = '1';
+
   } catch (error) {
     console.error('Error during initial data loading:', error);
     showValidationMessage('Error al cargar datos. Algunas funciones podrían no estar disponibles.');

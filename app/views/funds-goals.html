@@ -1,0 +1,21 @@
+      <div id="huchas-objetivos" class="tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+          <div>
+            <h2 style="margin: 0 0 4px 0; font-size: 22px; font-weight: 700; color: #1f2937;">Fondos y Objetivos</h2>
+            <p style="margin: 0; font-size: 13px; color: #6b7280;">Gestiona tus objetivos de inversión y seguimiento de
+              metas.</p>
+          </div>
+        </div>
+
+        <!-- Objetivos de Inversión -->
+        <div class="investment-goals-section">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: #374151;">🎯 Objetivos de Inversión</h3>
+            <button onclick="openNewGoalModal()" aria-label="Crear nuevo objetivo de ahorro"
+              style="display: flex; align-items: center; gap: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600; background: #8b5cf6; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s;"
+              onmouseover="this.style.background='#7c3aed'" onmouseout="this.style.background='#8b5cf6'">+ Nuevo
+              Objetivo</button>
+          </div>
+          <div class="investment-goals-grid" id="investment-goals-container"></div>
+        </div>
+      </div>

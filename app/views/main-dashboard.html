@@ -1,0 +1,41 @@
+      <div id="main" class="tab-content active">
+        <div style="display: flex; gap: 20px; align-items: stretch; margin-top: 10px;">
+          <div class="chart-container" style="flex: 1; margin: 0; min-width: 0; position: relative;">
+            <canvas id="savingsChart"></canvas>
+          </div>
+          <div class="chart-container" style="flex: 1; margin: 0; min-width: 0; position: relative;">
+            <canvas id="cumulativeChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Global Savings Row (Fondos Header) -->
+        <div id="global-savings-row"
+          style="background: white; border-radius: 8px; padding: 12px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; margin-top: 20px;">
+          <!-- Left side: Title and Add Button -->
+          <div style="display: flex; align-items: center; gap: 15px;">
+            <h3 style="margin: 0; color: #1f2937; font-size: 16px; font-weight: 700;">Fondos</h3>
+            <button onclick="openNewCustomFundModal()" aria-label="Añadir fondo"
+              style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: 1px dashed #d1d5db; background: transparent; cursor: pointer; font-size: 18px; color: #6b7280; padding: 0; transition: all 0.2s;"
+              onmouseover="this.style.background='#f9fafb'; this.style.borderColor='#9ca3af'"
+              onmouseout="this.style.background='transparent'; this.style.borderColor='#d1d5db'">+</button>
+          </div>
+
+          <!-- Right side: Total Savings -->
+          <div style="display: flex; align-items: baseline; gap: 10px;">
+            <span
+              style="color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">
+              Ahorros Totales</span>
+            <div class="amount" id="global-savings-display" style="font-size: 22px; font-weight: bold; color: #10b981;">
+              €0.00
+            </div>
+          </div>
+        </div>
+
+        <!-- Funds Section -->
+        <div style="margin-bottom: 30px;" id="custom-funds-wrapper">
+          <div id="custom-funds-list" style="display: flex; flex-wrap: wrap; gap: 15px;">
+            <!-- Render custom funds here -->
+          </div>
+        </div>
+
+      </div>
