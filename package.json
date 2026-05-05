@@ -6,13 +6,10 @@
   "engines": {
     "node": ">=24.0.0"
   },
-  "directories": {
-    "test": "tests"
-  },
   "scripts": {
     "start": "electron .",
     "test": "cross-env ELECTRON_RUN_AS_NODE=1 electron node_modules/jest/bin/jest.js",
-    "postinstall": "electron-rebuild",
+    "postinstall": "electron-builder install-app-deps",
     "dist": "electron-builder"
   },
   "keywords": [],
@@ -34,7 +31,7 @@
     "copyright": "Copyright © 2026 BRJ-23",
     "directories": {
       "output": "dist",
-      "buildResources": "app/assets"
+      "buildResources": "build"
     },
     "files": [
       "app/**/*",
@@ -49,15 +46,12 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "app/assets/icon.ico"
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "allowElevation": true,
-      "installerIcon": "app/assets/icon.ico",
-      "uninstallerIcon": "app/assets/icon.ico",
-      "installerHeaderIcon": "app/assets/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Financy",
