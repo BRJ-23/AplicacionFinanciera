@@ -1,7 +1,7 @@
-# Financy 💎
+# <img src="app/assets/logo.png" width="32" style="vertical-align: middle; margin-right: 10px;"> Financy
 ### Gestión Financiera Inteligente para el Mundo Real
 
-**Financy** es una aplicación de escritorio diseñada para gestionas tu dinero. Construida con **Electron** y **SQLite**, buscando ofrecer una experiencia fluida, visual y analítica.
+**Financy** es una aplicación de escritorio diseñada para gestionar tu dinero. Construida con **Electron** y **SQLite**, buscando ofrecer una experiencia fluida, visual y analítica.
 
 ---
 
@@ -33,7 +33,7 @@
 - **Core**: [Electron](https://www.electronjs.org/) (Desktop App Framework)
 - **Base de Datos**: [better-sqlite3](https://github.com/WiseLibs/node-better-sqlite3) (SQLite síncrono y de alto rendimiento)
 - **Visualización**: [Chart.js](https://www.chartjs.org/) (Gráficos interactivos)
-- **Frontend**: HTML5, CSS3 (Vanilla con estética Premium) y JavaScript ES6+
+- **Frontend**: HTML5, CSS3 y JavaScript ES6+ puros. Arquitectura de componentes **Vanilla JS** sin dependencias externas pesadas.
 
 ---
 
@@ -44,10 +44,14 @@ Financy/
 ├── app/
 │   ├── database.js   # Capa de datos relacional (8 tablas)
 │   ├── main.js       # Proceso principal de Electron
-│   ├── preload.js    # Puente seguro de comunicación
-│   ├── renderer.js   # Lógica central del Dashboard (Visualización y UX)
-│   ├── index.html    # Estructura UI moderna
-│   └── styles.css    # Sistema de diseño Premium (Dark mode y animaciones)
+│   ├── preload.js    # Puente seguro de comunicación (IPC)
+│   ├── renderer.js   # Lógica central. Carga dinámica de vistas.
+│   ├── index.html    # Contenedor principal de la aplicación
+│   ├── styles.css    # Índice de estilos globales (@import)
+│   ├── views/        # Fragmentos HTML modulares (sidebar, modales, etc.)
+│   └── css/          # Hojas de estilo modularizadas
+├── build/            # Recursos de empaquetado (iconos del instalador)
+├── dist/             # (Generado) Instaladores finales
 ├── tests/            # Suite de pruebas unitarias y de entorno
 └── README.md         # Documentación oficial
 ```
@@ -82,7 +86,7 @@ La aplicación utiliza una base de datos SQLite con una arquitectura de 8 tablas
    ```bash
    npm install
    ```
-   *(Nota: Se ejecutará `electron-rebuild` automáticamente para compilar el módulo nativo de SQLite).*
+   *(Nota: Se ejecutará `electron-builder install-app-deps` para alinear las dependencias nativas).*
 
 3. **Ejecutar la aplicación**:
    ```bash
@@ -94,6 +98,22 @@ La aplicación utiliza una base de datos SQLite con una arquitectura de 8 tablas
    npm test
    ```
 
+---
+
+## 📦 Generar Instalador (Windows)
+
+Para compilar la aplicación y generar un instalador `.exe` (NSIS) con tu icono personalizado, se utiliza `electron-builder`.
+
+> **⚠️ Importante para usuarios de Windows**
+> El proceso de compilación necesita crear enlaces simbólicos para algunas dependencias internas (`winCodeSign`). Por defecto, Windows bloquea esto por motivos de seguridad a los usuarios normales.
+
+Para compilar con éxito, debes **abrir PowerShell como Administrador** (o habilitar el "Modo de programador" en la configuración de Windows) y ejecutar:
+
+```powershell
+npm run dist
+```
+
+El instalador final (`Setup.exe`) y la versión ejecutable desempaquetada se guardarán automáticamente en la carpeta `dist/`.
 
 ---
 
