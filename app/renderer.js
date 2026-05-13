@@ -649,7 +649,7 @@ function createCategoryCharts(month) {
     });
 
     const used = expenses.reduce((s, e) => s + e.amount, 0);
-    const available = Math.max(0, totalBudget - used);
+    const available = totalBudget - used;
 
     let labels = Object.keys(catMap);
     if (labels.length === 0 && available <= 0) {
@@ -737,9 +737,9 @@ function updateMonthlyDashboard(month) {
 
   const { monthlyUsed, personalUsed, investmentUsed } = getExpenseUsage(budget);
 
-  const monthlyLeftover    = Math.max(0, budget.monthlyExpenses - monthlyUsed);
-  const personalLeftover   = Math.max(0, budget.personalExpenses - personalUsed);
-  const investmentLeftover = Math.max(0, budget.investments - investmentUsed);
+  const monthlyLeftover    = budget.monthlyExpenses - monthlyUsed;
+  const personalLeftover   = budget.personalExpenses - personalUsed;
+  const investmentLeftover = budget.investments - investmentUsed;
   const totalSavings = budget.savings + monthlyLeftover + personalLeftover + investmentLeftover;
 
   const setEl = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
@@ -750,14 +750,23 @@ function updateMonthlyDashboard(month) {
   setEl(`${month}-investment-info`, `Usado: €${investmentUsed.toFixed(2)} / €${budget.investments.toFixed(2)}`);
   setEl(`${month}-savings-info`,    `Base: €${budget.savings.toFixed(2)} + Sobrantes: €${(monthlyLeftover + personalLeftover + investmentLeftover).toFixed(2)}`);
   setEl(`${month}-savings-display`, `€${totalSavings.toFixed(2)}`);
+  const savingsDisplayEl = document.getElementById(`${month}-savings-display`);
+  if (savingsDisplayEl) {
+    savingsDisplayEl.style.color = totalSavings < 0 ? '#ef4444' : '';
+  }
 
   // Progress bars
   function updateBar(fillId, remainingId, used, bgt) {
     const pct   = bgt > 0 ? Math.max(0, 100 - (used / bgt) * 100) : 0;
     const fillEl = document.getElementById(fillId);
     const remEl  = document.getElementById(remainingId);
-    if (fillEl) fillEl.style.width = pct + '%';
-    if (remEl)  remEl.textContent  = `€${Math.max(0, bgt - used).toFixed(2)} disp.`;
+    if (fillEl) fillEl.style.width = Math.max(0, pct) + '%';
+    if (remEl) {
+      const diff = bgt - used;
+      remEl.textContent = `€${diff.toFixed(2)}`;
+      if (diff < 0) remEl.style.color = '#ef4444';
+      else remEl.style.color = '';
+    }
   }
   updateBar(`${month}-monthly-fill`,    `${month}-monthly-remaining`,    monthlyUsed,    budget.monthlyExpenses);
   updateBar(`${month}-personal-fill`,   `${month}-personal-remaining`,   personalUsed,   budget.personalExpenses);
@@ -993,10 +1002,7 @@ window.addTransaction = function(month) {
                       : type === 'personal' ? budget.personalExpenses
                       : budget.investments;
     const currentUsed = budget.expenses.filter(e => e.type === type).reduce((s, e) => s + e.amount, 0);
-    if (currentUsed + amount > budgetLimit) {
-      showValidationMessage(`Excede presupuesto. Disponible: €${Math.max(0, budgetLimit - currentUsed).toFixed(2)}`);
-      return;
-    }
+
     if (type === 'investment' && !contextValue) {
       showValidationMessage('Selecciona un fondo de inversión'); return;
     }
@@ -1143,7 +1149,7 @@ function initializeSavingsChart() {
         ticks: { color: '#9ca3af', font: { size: 12 } }
       },
       y: {
-        beginAtZero: true,
+        beginAtZero: false,
         grid: { color: 'rgba(0, 0, 0, 0.05)', drawBorder: false },
         ticks: {
           color: '#9ca3af',
@@ -1161,10 +1167,16 @@ function initializeSavingsChart() {
     data: {
       labels: CHART_LABELS,
       datasets: [{
-        label: 'Ahorro Mensual',
+        label: 'Ahorros Mensuales',
         data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        backgroundColor: 'rgba(99, 102, 241, 0.8)',
-        hoverBackgroundColor: '#6366f1',
+        backgroundColor: ctx => {
+          const val = ctx.raw;
+          return val < 0 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(99, 102, 241, 0.8)';
+        },
+        hoverBackgroundColor: ctx => {
+          const val = ctx.raw;
+          return val < 0 ? '#ef4444' : '#6366f1';
+        },
         borderRadius: 6,
         borderSkipped: false,
         barPercentage: 0.6,
@@ -1192,13 +1204,41 @@ function initializeSavingsChart() {
       datasets: [{
         label: 'Ahorro Acumulado',
         data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.07)',
+        borderColor: (context) => {
+          const chart = context.chart;
+          const {ctx, chartArea} = chart;
+          if (!chartArea) return '#10b981';
+          const yAxis = chart.scales.y;
+          const zeroPos = yAxis.getPixelForValue(0);
+          const relativePos = (zeroPos - chartArea.top) / (chartArea.bottom - chartArea.top);
+          const clampedPos = Math.max(0, Math.min(1, relativePos));
+          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+          gradient.addColorStop(0, '#10b981');
+          gradient.addColorStop(clampedPos, '#10b981');
+          gradient.addColorStop(clampedPos, '#ef4444');
+          gradient.addColorStop(1, '#ef4444');
+          return gradient;
+        },
+        backgroundColor: (context) => {
+          const chart = context.chart;
+          const {ctx, chartArea} = chart;
+          if (!chartArea) return 'rgba(16, 185, 129, 0.07)';
+          const yAxis = chart.scales.y;
+          const zeroPos = yAxis.getPixelForValue(0);
+          const relativePos = (zeroPos - chartArea.top) / (chartArea.bottom - chartArea.top);
+          const clampedPos = Math.max(0, Math.min(1, relativePos));
+          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+          gradient.addColorStop(0, 'rgba(16, 185, 129, 0.07)');
+          gradient.addColorStop(clampedPos, 'rgba(16, 185, 129, 0.07)');
+          gradient.addColorStop(clampedPos, 'rgba(239, 68, 68, 0.07)');
+          gradient.addColorStop(1, 'rgba(239, 68, 68, 0.07)');
+          return gradient;
+        },
         borderWidth: 2,
         fill: true,
         tension: 0.4,
         pointRadius: 4,
-        pointBackgroundColor: '#10b981',
+        pointBackgroundColor: ctx => ctx.raw < 0 ? '#ef4444' : '#10b981',
         pointBorderColor: '#ffffff',
         pointBorderWidth: 2,
         pointHoverRadius: 6
@@ -1252,7 +1292,7 @@ async function updateCumulativeChart() {
 
     MONTHS.forEach(m => {
       const b = yearBudgets[m];
-      if (!b || b.totalIncome === 0) return;
+      if (!b) return;
 
       // Usando allocations por defecto para años pasados (simplificación coherente con updateGlobalSavings)
       const mPct = 40 / 100, pPct = 20 / 100, iPct = 20 / 100, sPct = 20 / 100;
@@ -1284,7 +1324,7 @@ async function updateCumulativeChart() {
   let running = baseline;
   const data = MONTHS.map(month => {
     const budget = monthlyBudgets[month];
-    if (budget.totalIncome === 0) return running;
+    if (!budget) return running;
 
     const mUsed = budget.expenses.filter(e => e.type === 'monthly').reduce((s, e) => s + e.amount, 0);
     const pUsed = budget.expenses.filter(e => e.type === 'personal').reduce((s, e) => s + e.amount, 0);
@@ -1318,7 +1358,7 @@ async function updateSavingsChart() {
 
   const savingsData = MONTHS.map(month => {
     const budget = monthlyBudgets[month];
-    if (budget.totalIncome === 0) return 0;
+    if (!budget) return 0;
 
     const { monthlyUsed, personalUsed, investmentUsed } = getExpenseUsage(budget);
     return budget.savings
@@ -1370,7 +1410,7 @@ async function updateGlobalSavings() {
 
     MONTHS.forEach(month => {
       const budget = yearBudgets[month];
-      if (!budget || budget.totalIncome === 0) return;
+      if (!budget) return;
 
       const mode = (year === currentYear) ? getModeForMonth(month) : { allocations: { monthly: 40, personal: 20, investment: 20, savings: 20 } };
       // Nota: Para años pasados, si no guardamos el modo específico usado en aquel entonces en la DB,
@@ -1426,6 +1466,7 @@ async function updateGlobalSavings() {
   const display = document.getElementById('global-savings-display');
   if (display) {
     display.textContent = `€${globalTotal.toFixed(2)}`;
+    display.style.color = globalTotal < 0 ? '#ef4444' : '';
   }
 
   renderCustomFunds(totalAppSavings);
@@ -1482,7 +1523,7 @@ function renderCustomFunds(appSavings = 0) {
             </div>
           </div>
         </div>
-        <div style="font-size: 20px; font-weight: bold; color: ${fund.isDefault ? '#10b981' : '#111827'}; margin-top: 5px; margin-bottom: 8px;">
+        <div style="font-size: 20px; font-weight: bold; color: ${displayAmount < 0 ? '#ef4444' : (fund.isDefault ? '#10b981' : '#111827')}; margin-top: 5px; margin-bottom: 8px;">
           €${displayAmount.toFixed(2)}
         </div>
         <div class="month-progress-track" style="height: 4px; margin-bottom: 12px; background: #f3f4f6;">
@@ -1809,7 +1850,7 @@ function renderInvestmentGoals() {
               <span class="pct-badge investment-badge">${percentage.toFixed(0)}%</span>
             </div>
             <span class="progress-remaining investment-remaining" style="font-size: 11px; font-weight: 600; color: #8b5cf6;">
-              ${isComplete ? '✓ Completado' : `Falta €${remaining.toFixed(2)}`}
+              ${remaining < 0 ? `€${remaining.toFixed(2)}` : (isComplete ? '✓ Completado' : `€${remaining.toFixed(2)}`)}
             </span>
           </div>
           <div class="month-progress-track">
